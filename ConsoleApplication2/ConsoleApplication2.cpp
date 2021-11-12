@@ -1,4 +1,6 @@
 #include <iostream>
+#include <sstream>
+#include <iomanip>
 
 
 const unsigned int NUM_ROUNDS = 4 + 6;
@@ -23,7 +25,7 @@ static const unsigned char SBOX[256] =
   0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16
 };
 
-static const unsigned char INV_SBOX[256] = { 0 };
+unsigned char INV_SBOX[256] = { 0 };
 
 static const unsigned char RCON[255] =
 {
@@ -45,6 +47,38 @@ static const unsigned char RCON[255] =
   0x61, 0xc2, 0x9f, 0x25, 0x4a, 0x94, 0x33, 0x66, 0xcc, 0x83, 0x1d, 0x3a, 0x74, 0xe8, 0xcb
 };
 
+template< typename T >
+std::string int_to_hex(T i)
+{
+    std::stringstream stream;
+    stream << "0x"
+        << std::setfill('0') << std::setw(2)
+        << std::hex << i;
+    return stream.str();
+}
+
+
+void genInvSBox(static const unsigned char* sbox, unsigned char* invsbox) {
+
+    std::stringstream ss;
+
+    for (size_t i = 0; i < 256; i++)
+    {
+        for (size_t j = 0; j < 256; j++)
+        {
+            if ((int)sbox[j] == i)
+            {
+                invsbox[i] = (unsigned char)j;
+            }
+           
+
+
+        }
+    }
+
+    return;
+
+}
 
 void keyExpansion(const unsigned char* key, unsigned char* roundKey)
 {
@@ -274,13 +308,130 @@ void decipher(const unsigned char* in, const unsigned char* roundKey, unsigned c
     }
 }
 
+void findKey() {
+
+    std::string schluessel, text = "";
+    unsigned char out[16];
+    unsigned char key[16] = { 0x81, 0x59, 0x6b, 0xfb, 0x39, 0xc6, 0x2b, 0x71, 0x6e, 0x52, 0xdb, 0x91, 0x81, 0x00, 0x00, 0x00 }; // Key in HEX 
+    unsigned char in[16] = { 0xbf, 0x3f, 0xb7, 0x7d, 0x93, 0xdd, 0x6c, 0xfd, 0xef, 0xb8, 0x82, 0x2b, 0x82, 0xd0, 0x35, 0x8a };
+
+    clock_t t;
+    t = clock();
+    int k = 0;
+    while ((key[15] != 0xff) || (key[14] != 0xff) || (key[13] != 0xff)) // loop until the last Bytes are filled
+    {
+        k++;
+        for (int i = 15; i > 12; i--) // iterate through last three bytes
+        {
+            if (key[i] < 0xff) {    // check if current byte can be increased
+                key[i] += 1;
+                break;
+            }
+            key[i] = 0x00;          // reset byte if it's on 0xff
+        }
+
+        unsigned char roundKey[240];
+        keyExpansion(key, roundKey);    
+        decipher(in, roundKey, out);    
+        bool valid = true;              
+        for (int i = 0; i < sizeof(out); i++) {
+            if (out[i] > 122 || out[i] < 97 && out[i] != 46) {  // between a-z or .
+                valid = false;
+                break;
+            }
+        }
+        if (k == 4096) {
+            t = clock() - t;
+            printf("%d clicks for 4096 Keys (%f seconds).\n", t, ((float)t) / CLOCKS_PER_SEC);
+            printf("estimated %f seconds for all Keys (16.777.216).", ((float)t) / CLOCKS_PER_SEC * 4096);
+        }
+        if (valid) {
+            for (int i = 0; i < sizeof(out); i++) {
+                text += out[i]; // char in string for printing
+            }
+            for (int i = 0; i < sizeof(key); i++) {
+                int zahl = key[i];
+                int hexF = zahl / 16;   // First part of byte
+                int hexS = zahl % 16;   // Second part of byte
+
+                if (hexF < 10) {
+                    schluessel += std::to_string(hexF);
+                }
+                else
+                {
+                    switch (hexF)
+                    {
+                    case 10:
+                        schluessel += "a";
+                        break;
+                    case 11:
+                        schluessel += "b";
+                        break;
+                    case 12:
+                        schluessel += "c";
+                        break;
+                    case 13:
+                        schluessel += "d";
+                        break;
+                    case 14:
+                        schluessel += "e";
+                        break;
+                    case 15:
+                        schluessel += "f";
+                        break;
+                    default:
+                        break;
+                    }
+                }
+                if (hexS < 10) {
+                    schluessel += std::to_string(hexS);
+                }
+                else
+                {
+                    switch (hexS)
+                    {
+                    case 10:
+                        schluessel += "a";
+                        break;
+                    case 11:
+                        schluessel += "b";
+                        break;
+                    case 12:
+                        schluessel += "c";
+                        break;
+                    case 13:
+                        schluessel += "d";
+                        break;
+                    case 14:
+                        schluessel += "e";
+                        break;
+                    case 15:
+                        schluessel += "f";
+                        break;
+                    default:
+                        break;
+                    }
+                }
+
+            }
+            break;
+        }
+
+    }
+
+    std::cout << std::endl << text << std::endl;
+    std::cout << schluessel << std::endl;
+}
 
 int main(int argc, char* argv[])
 {
     unsigned char roundKey[240];
     unsigned char out[16];
+    unsigned char deciphered[16];
 
-    // Sample
+    genInvSBox(SBOX, INV_SBOX); //generate inverse sbox
+
+    // test invsbox
     {
         const unsigned char in[16] =
         {
@@ -305,7 +456,16 @@ int main(int argc, char* argv[])
         for (unsigned int i = 0; i != 4 * 4; ++i)
             std::cout << "0x" << (unsigned int)out[i] << ", ";
         std::cout << std::endl;
+
+        decipher(out, roundKey, deciphered);
+
+        std::cout << std::endl << "Text after decryption:" << std::hex << std::endl;
+        for (unsigned int i = 0; i != 4 * 4; ++i)
+            std::cout << "0x" << (unsigned int)deciphered[i] << ", ";
+        std::cout << std::endl << std::endl;
     }
+
+    findKey();
 
     return 0;
 }
